@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Notebooks (jupytext converts them all to Python)
+*.ipynb
+
 # C extensions
 *.so
 
