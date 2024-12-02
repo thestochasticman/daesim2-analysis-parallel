@@ -16,13 +16,13 @@ TODO
 
 ## Getting started
 
-Make your conda environment called `daesim-analysis` using the environment.yml file and the command:
+Make your conda environment called `daesim2-analysis` using the environment.yml file and the command:
 
-$ conda env create --name daesim-analysis --file environment.yml
+$ conda env create --name daesim2-analysis --file environment.yml
 
 Then, you can activate your new environment with the command:
 
-$ conda activate daesim-analysis
+$ conda activate daesim2-analysis
 
 Now you have created the conda virtual environment to work in, we must install the package. To install the package use the command:
 
@@ -93,7 +93,7 @@ git fetch origin
 git checkout -b local-source origin/local-source
 
 # Activate your environment
-conda activate daesim-analysis
+conda activate daesim2-analysis
 
 [remove]# Call make (just in case, you don't always have to do this)
 # make conda-environment
