@@ -1,0 +1,22 @@
+name: daesim2-analysis
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - importlib_metadata
+  - ipython
+  - jupyter
+  - jupytext
+  - matplotlib>=2.2.5
+  - nb_black
+  - notebook
+  - pandas>=1.4.4
+  - pip
+  - pip:
+    - git+https://github.com/NortonAlex/DAESIM@1519a1616529d7ccd48f871164e06edfe7f06ce0#egg=daesim
+  - scipy>=1.9.1
+  - numpy
+  - xarray
+  - netCDF4
+  - SALib

@@ -1,0 +1,24 @@
+Metadata-Version: 2.1
+Name: daesim2-analysis
+Version: 0.0.1
+Summary: analysis support for the dynamic agro-ecosystem simulator
+Author: Alexander Norton
+Author-email: alexander.norton@anu.edu.au
+License: MIT
+Keywords: daesim,analysis,model,agroecosystem,python
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Operating System :: OS Independent
+Classifier: Intended Audience :: Science/Research
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Topic :: Scientific/Engineering
+Requires-Python: >=3.8
+License-File: LICENSE
+Requires-Dist: numpy
+Requires-Dist: scipy
+Requires-Dist: matplotlib
+Requires-Dist: pandas
+Requires-Dist: SALib
+Requires-Dist: daesim@ git+https://github.com/NortonAlex/DAESIM@1519a1616529d7ccd48f871164e06edfe7f06ce0#egg=daesim
