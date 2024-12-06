@@ -3,7 +3,7 @@ Analysis helper functions to support DAESIM2 analysis, sensitivity, calibration,
 """
 
 from typing import Any
-from netCDF4 import date2num
+from netCDF4 import date2num, Dataset
 from datetime import datetime, timedelta
 import time
 import subprocess
@@ -212,11 +212,14 @@ def update_attribute(obj: Any, path: str, new_value: Any) -> None:
     """
     attributes = path.split('.')
     # Traverse the path except for the last attribute
-    for attr in attributes[:-1]:
-        obj = getattr(obj, attr)
-
-    # Set the new value to the last attribute in the path
-    setattr(obj, attributes[-1], new_value)
+    if attributes[0] == "":
+        # attribute is in the parent class (i.e. not in a sub-class of the obj)
+        setattr(obj, attributes[-1], new_value)
+    else:
+        for attr in attributes[:-1]:
+            obj = getattr(obj, attr)
+            # Set the new value to the last attribute in the path
+        setattr(obj, attributes[-1], new_value)
 
 def update_attribute_in_phase(obj: Any, path: str, new_value: Any, phase: str) -> None:
     """
@@ -341,7 +344,7 @@ def update_and_run_model(param_values, model_instance, input_data, param_info, s
 
     return model_outputs
 
-def write_diagnostics_to_nc(Model, model_diagnostics, filepath, filename, time_axis, time_nday, time_year, problem, param_values):
+def write_diagnostics_to_nc(Model, model_diagnostics, filepath, filename, time_axis, time_nday, time_year, time_doy, problem, param_values):
     # Create datetimes for writing the netcdf
     # years and days-of-year
     tinds = np.where((time_nday >= time_axis[0]) & (time_nday <= time_axis[-1]))
