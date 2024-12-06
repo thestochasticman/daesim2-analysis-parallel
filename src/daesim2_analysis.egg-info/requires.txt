@@ -3,4 +3,4 @@ scipy
 matplotlib
 pandas
 SALib
-daesim@ git+https://github.com/NortonAlex/DAESIM@1519a1616529d7ccd48f871164e06edfe7f06ce0#egg=daesim
+daesim@ git+https://github.com/NortonAlex/DAESIM@b09baa315c7697279f4c37349f45ca79d101edbb#egg=daesim
