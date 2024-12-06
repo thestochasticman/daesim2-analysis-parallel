@@ -12,10 +12,67 @@
 #     name: python3
 # ---
 
+# %% [markdown]
+# # FAST Sensitivity Analysis
+#
+# Efficiency: 
+#
+# FAST uses a frequency-based sampling approach that transforms the sensitivity analysis into a spectral analysis problem. This allows it to estimate first-order and total-order sensitivity indices with fewer model evaluations compared to Sobol’ sequences, which rely on a large number of Monte Carlo-style simulations to achieve similar results.
+#
+# - Mechanism: FAST converts the multi-dimensional sensitivity problem into a one-dimensional function using a sinusoidal transformation, making it easier to extract sensitivity indices via Fourier transformations.
+# - Sample size: FAST typically requires far fewer model runs than Sobol’, especially as the number of parameters increases. For example, FAST might require on the order of hundreds of model evaluations, while Sobol’ sequences may require thousands to achieve the same level of accuracy.
+# - Higher-order interactions: While FAST is efficient at capturing first-order and total-order effects, its ability to handle higher-order interactions (i.e., interactions between more than two parameters) is more limited compared to Sobol’s method, which decomposes variance at multiple levels.
+#
+# Advantages:
+#
+# - Computational efficiency: FAST often requires fewer model runs to converge on reliable sensitivity indices, making it faster for large-scale models.
+# - Non-linearity: It is well-suited for models with strong non-linearities.
+# - Smaller sample size: Achieves good coverage of the parameter space with fewer samples compared to Sobol’.
+#
+# Disadvantages:
+#
+# - Handling interactions: While FAST can capture total-order sensitivity (including interactions), it may not fully distinguish between individual higher-order interactions (e.g., interactions between three or more parameters).
+# - Periodic inputs: FAST is better suited to continuous and periodic inputs, which can be a limitation if your model’s parameters are non-periodic or have unusual distributions.
+#
+# FAST is typically more computationally efficient than Sobol’ sequences for sensitivity analysis, especially when the focus is on first-order and total-order sensitivity indices. Sobol' sequences are more robust for detailed interaction analysis but are more resource-intensive.
+#
+# ### Step 1.  Install Required Libraries
+#
+# The main Python package for performing FAST is SALib (Sensitivity Analysis Library). If you don’t have it installed, you can install it via pip or conda. 
+
 # %%
+from SALib.sample import fast_sampler
+from SALib.analyze import fast
+
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+
+## DAESIM2
+from daesim.plant_1000 import PlantModuleCalculator
+from daesim.climate import *
+from daesim.plantgrowthphases import PlantGrowthPhases
+from daesim.management import ManagementModule
+from daesim.soillayers import SoilLayers
+from daesim.canopylayers import CanopyLayers
+from daesim.canopyradiation import CanopyRadiation
+from daesim.boundarylayer import BoundaryLayerModule
+from daesim.leafgasexchange import LeafGasExchangeModule
+from daesim.leafgasexchange2 import LeafGasExchangeModule2
+from daesim.canopygasexchange import CanopyGasExchange
+from daesim.plantcarbonwater import PlantModel as PlantCH2O
+from daesim.plantallocoptimal import PlantOptimalAllocation
+from daesim.utils import ODEModelSolver
+
+## DAESIM2 Analysis
+from daesim2_analysis import fast_sensitivity as fastsa
+
+# %% [markdown]
+# ### Step 2. Define the model problem
+#
+# Need to define the number of parameters, their names, and the ranges (bounds) over which the sensitivity analysis will be performed. For example, if your model has three parameters (e.g., param1, param2, param3), you would define the problem in the following format:
+#
+# This includes both model parameters (e.g. here this includes Vcmax_opt, Jmax_opt, g1) and the forcing data ranges (e.g. here this includes T, Q, fgsw).
 
 # %%
 ## Parameters
@@ -49,5 +106,344 @@ parameters_df = pd.DataFrame({
     "Min": parameter_min,
     "Max": parameter_max
 })
+
+# Dictionary required as input to SALib FAST sampler
+problem = {
+    "num_vars": len(parameters_df),    # Number of input parameters
+    "names": parameters_df["Name"].values,   # Parameter names
+    "bounds": [[row['Min'], row['Max']] for _, row in parameters_df.iterrows()],    # Parameter ranges
+}
+
+# %% [markdown]
+# ### Step 3. Generate the FAST Samples
+#
+# To apply the FAST method, you need to generate the sampling points for the input parameters using the SALib.sample.fast function. Here, you specify the total number of samples you want (it is important to choose a sufficiently large number to ensure the analysis is robust). 
+#
+# N.B. For a typical FAST setup:
+#
+# - num_samples refers to the number of frequencies used to sample each parameter.
+# - The actual number of parameter sets generated depends on num_vars and the sampling process.
+#
+# The total number of samples is typically num_samples * num_vars, and thus, Y should have this size. You can adjust the setup to reflect this. 
+
+# %%
+# Generate samples using the FAST method
+num_samples = 300  # Number of samples to be generated
+param_values = fast_sampler.sample(problem, num_samples, seed=0)
+
+# param_values will contain the sampled input sets for the parameters
+param_values.shape
+
+# %% [markdown]
+# ### Step 4. Initialise the study site and import forcing data
+
+# %%
+# Import two years of forcing files and combine then
+file = "/Users/alexandernorton/ANU/Projects/DAESIM/daesim/data/DAESim_forcing_Milgadara_2018.csv"
+df_forcing1 = pd.read_csv(file)
+
+file = "/Users/alexandernorton/ANU/Projects/DAESIM/daesim/data/DAESim_forcing_Milgadara_2019.csv"
+df_forcing2 = pd.read_csv(file)
+
+df_forcing1['Date'] = pd.to_datetime(df_forcing1['Date'])
+df_forcing2['Date'] = pd.to_datetime(df_forcing2['Date'])
+
+# Append the new dataframe and drop duplicates based on the "Date" column
+df_forcing = pd.concat([df_forcing1, df_forcing2]).drop_duplicates(subset="Date").sort_values(by="Date")
+
+# Reset the index for the combined dataframe (optional)
+df_forcing.reset_index(drop=True, inplace=True)
+
+# Add ordinal day of year (DOY) and Year variables
+df_forcing["DOY"] = df_forcing["Date"].dt.dayofyear
+df_forcing["Year"] = df_forcing["Date"].dt.year
+
+# %%
+
+# %%
+# file = "/Users/alexandernorton/ANU/Projects/DAESIM/daesim/data/DAESim_forcing_Milgadara_2021.csv"
+# df_forcing = pd.read_csv(file)
+
+# df_forcing['Date'] = pd.to_datetime(df_forcing['Date'])
+
+# # Add ordinal day of year (DOY) and Year variables
+# df_forcing["DOY"] = df_forcing["Date"].dt.dayofyear
+# df_forcing["Year"] = df_forcing["Date"].dt.year
+
+# %%
+## Interpolate discrete soil moisture data
+df_forcing["Soil moisture interp"] = df_forcing["Soil moisture"].interpolate('quadratic')
+
+## Assume that the forcing data (units: mm) can be equated to relative changes in volumetric soil moisture between two arbitrary minimum and maximum values
+f_soilTheta_min = 0.25
+f_soilTheta_max = 0.40
+
+f_soilTheta_min_mm = df_forcing["Soil moisture interp"].min()
+f_soilTheta_max_mm = df_forcing["Soil moisture interp"].max()
+
+f_soilTheta_norm_mm = (df_forcing["Soil moisture interp"].values - f_soilTheta_min_mm)/(f_soilTheta_max_mm - f_soilTheta_min_mm)
+f_soilTheta_norm = f_soilTheta_min + f_soilTheta_norm_mm * (f_soilTheta_max - f_soilTheta_min)
+
+
+## Milgadara site location-34.38904277303204, 148.46949938279096
+SiteX = ClimateModule(CLatDeg=-34.389,CLonDeg=148.469,timezone=10)
+start_doy = df_forcing["DOY"].values[0]    # 1.0
+start_year = df_forcing["Year"].values[0]   # 2021
+nrundays = df_forcing.index.size
+
+## Time discretisation
+time_nday, time_doy, time_year = SiteX.time_discretisation(start_doy, start_year, nrundays=nrundays)
+## Adjust daily time-step to represent midday on each day
+time_doy = [time_doy[i]+0.5 for i in range(len(time_doy))]
+
+# %% [markdown]
+# ### - Discrete forcing data
+
+# %%
+
+# %%
+
+# %%
+
+# %%
+
+# %% [markdown]
+# ### - Interpolated forcing data
+
+# %%
+## Make some assumption about the fraction of diffuse radiation
+diffuse_fraction = 0.2
+
+## Shortwave radiation at surface (convert MJ m-2 d-1 to W m-2)
+_Rsb_Wm2 = (1-diffuse_fraction) * df_forcing["SRAD"].values * 1e6 / (60*60*24)
+_Rsd_Wm2 = diffuse_fraction * df_forcing["SRAD"].values * 1e6 / (60*60*24)
+
+## Create synthetic data for other forcing variables
+_p = 101325*np.ones(nrundays)
+_es = SiteX.compute_sat_vapor_pressure_daily(df_forcing["Minimum temperature"].values,df_forcing["Maximum temperature"].values)
+_RH = SiteX.compute_relative_humidity(df_forcing["VPeff"].values/10,_es/1000)
+_RH[_RH > 100] = 100
+_CO2 = 400*(_p/1e5)*1e-6     ## carbon dioxide partial pressure (bar)
+_O2 = 209000*(_p/1e5)*1e-6   ## oxygen partial pressure (bar)
+_soilTheta =  0.35*np.ones(nrundays)   ## volumetric soil moisture content (m3 m-3)
+_soilTheta = f_soilTheta_norm
+
+## Create a multi-layer soil moisture forcing dataset
+## Option 1: Same soil moisture across all layers
+nlevmlsoil = 2
+_soilTheta_z = np.repeat(_soilTheta[:, np.newaxis], nlevmlsoil, axis=1)
+## Option 2: Adjust soil moisture in each layer
+_soilTheta_z0 = _soilTheta-0.04
+_soilTheta_z1 = _soilTheta+0.04
+_soilTheta_z = np.column_stack((_soilTheta_z0, _soilTheta_z1))
+
+# %%
+Climate_doy_f = interp_forcing(time_nday, time_doy, kind="pconst", fill_value=(time_doy[0],time_doy[-1]))
+Climate_year_f = interp_forcing(time_nday, time_year, kind="pconst", fill_value=(time_year[0],time_year[-1]))
+Climate_airTempCMin_f = interp1d(time_nday, df_forcing["Minimum temperature"].values)
+Climate_airTempCMax_f = interp1d(time_nday, df_forcing["Maximum temperature"].values)
+Climate_airTempC_f = interp1d(time_nday, (df_forcing["Minimum temperature"].values+df_forcing["Maximum temperature"].values)/2)
+Climate_solRadswskyb_f = interp1d(time_nday, _Rsb_Wm2)
+Climate_solRadswskyd_f = interp1d(time_nday, _Rsd_Wm2)
+Climate_airPressure_f = interp1d(time_nday, _p)
+Climate_airRH_f = interp1d(time_nday, _RH)
+Climate_airU_f = interp1d(time_nday, df_forcing["Uavg"].values)
+Climate_airCO2_f = interp1d(time_nday, _CO2)
+Climate_airO2_f = interp1d(time_nday, _O2)
+Climate_soilTheta_f = interp1d(time_nday, _soilTheta)
+Climate_soilTheta_z_f = interp1d(time_nday, _soilTheta_z, axis=0)  # Interpolates across timesteps, handles all soil layers at once
+Climate_nday_f = interp1d(time_nday, time_nday)   ## nday represents the ordinal day-of-year plus each simulation day (e.g. a model run starting on Jan 30 and going for 2 years will have nday=30+np.arange(2*365))
+
+# %% [markdown]
+# ### Step 4. Initialise the Model
+
+# %%
+time_axis = np.arange(135, 391, 1)   ## Note: time_axis represents the simulation day (_nday) and must be the same x-axis upon which the forcing data was interpolated on
+sowing_date = 135
+harvest_date = None
+
+ManagementX = ManagementModule(cropType="Wheat",sowingDay=sowing_date,harvestDay=harvest_date)
+
+PlantDevX = PlantGrowthPhases(
+    phases=["germination", "vegetative", "spike", "anthesis", "grainfill", "maturity"],
+    gdd_requirements=[120,800,250,200,300,200],
+    vd_requirements=[0, 40, 0, 0, 0, 0],
+    allocation_coeffs = [
+        [0.2, 0.1, 0.7, 0.0, 0.0],
+        [0.5, 0.1, 0.4, 0.0, 0.0],
+        [0.20, 0.6, 0.20, 0.0, 0.0],
+        [0.25, 0.5, 0.25, 0.0, 0.0],
+        [0.1, 0.1, 0.1, 0.7, 0.0],
+        [0.1, 0.1, 0.1, 0.7, 0.0]
+    ],
+    turnover_rates = [[0.001,  0.001, 0.001, 0.0, 0.0],
+                      [0.01, 0.002, 0.008, 0.0, 0.0],
+                      [0.01, 0.002, 0.008, 0.0, 0.0],
+                      [0.01, 0.002, 0.008, 0.0, 0.0],
+                      [0.033, 0.016, 0.033, 0.0002, 0.0],
+                      [0.10, 0.033, 0.10, 0.0002, 0.0]])
+
+
+BoundLayerX = BoundaryLayerModule(Site=SiteX)
+LeafX = LeafGasExchangeModule2(Site=SiteX,Jmax_opt_rVcmax=0.89,Jmax_opt_rVcmax_method="log")
+CanopyX = CanopyLayers(nlevmlcan=3)
+CanopyRadX = CanopyRadiation(Canopy=CanopyX)
+CanopyGasExchangeX = CanopyGasExchange(Leaf=LeafX,Canopy=CanopyX,CanopyRad=CanopyRadX)
+SoilLayersX = SoilLayers(nlevmlsoil=2,z_max=2.0)
+PlantCH2OX = PlantCH2O(Site=SiteX,SoilLayers=SoilLayersX,CanopyGasExchange=CanopyGasExchangeX,BoundaryLayer=BoundLayerX,maxLAI=6.0,ksr_coeff=1000,SLA=0.030)
+PlantAllocX = PlantOptimalAllocation(Plant=PlantCH2OX,dWL_factor=1.02,dWR_factor=1.02)
+PlantX = PlantModuleCalculator(
+    Site=SiteX,
+    Management=ManagementX,
+    PlantDev=PlantDevX,
+    PlantCH2O=PlantCH2OX,
+    PlantAlloc=PlantAllocX,
+    GDD_method="nonlinear",
+    GDD_Tbase=0.0,
+    GDD_Topt=22.5,
+    GDD_Tupp=35.0,
+    hc_max_GDDindex=sum(PlantDevX.gdd_requirements[0:2])/PlantDevX.totalgdd,
+    d_r_max=2.0,
+    Vmaxremob=3.0,
+    Kmremob=0.5,
+    remob_phase=["grainfill","maturity"],
+    specified_phase="anthesis",
+    grainfill_phase=["grainfill","maturity"],
+)
+
+# %%
+## Define the callable calculator that defines the right-hand-side ODE function
+PlantXCalc = PlantX.calculate
+
+Model = ODEModelSolver(calculator=PlantXCalc, states_init=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], time_start=time_axis[0], log_diagnostics=True)
+
+forcing_inputs = [Climate_solRadswskyb_f,
+                  Climate_solRadswskyd_f,
+                  Climate_airTempCMin_f,
+                  Climate_airTempCMax_f,
+                  Climate_airPressure_f,
+                  Climate_airRH_f,
+                  Climate_airCO2_f,
+                  Climate_airO2_f,
+                  Climate_airU_f,
+                  Climate_soilTheta_z_f,
+                  Climate_doy_f,
+                  Climate_year_f]
+
+reset_days = [PlantX.Management.sowingDay, PlantX.Management.harvestDay]
+
+zero_crossing_indices = [4,5,6]
+
+# %% [markdown]
+# ### Step 5. Re-Initialise and Run the Model Using the Sampled Input Sets
+#
+# Once you have the samples, you can evaluate your model at each of the sampled input points. This typically involves running a loop where each set of sampled inputs is passed through the model, and the output (or outputs) is recorded.
+
+# %%
+write_to_nc = True
+
+# Location/site of the simulations
+xsite = "Milgadara_2021_test1"
+
+# Path for writing outputs to file
+filepath_write = "/Users/alexandernorton/ANU/Projects/DAESim/DAESIM/results/FAST/"
+
+# Create input_data for model run
+input_data = [ODEModelSolver, time_axis, forcing_inputs, reset_days, zero_crossing_indices]
+
+# Create output array for target variables
+Mpx = []
+
+# Sub-sample the FAST samples
+nsamples = 100
+isamples = np.array([1]) #np.arange(0,param_values.shape[0],param_values.shape[0]/nsamples,dtype=int)
+
+iparamset = 0
+# for iparamset in isamples:
+param_set = param_values[iparamset]
+# Select parameter set from FAST samples
+nparamset = iparamset+1
+
+# Call the function that updates parameters, runs the model and returns selected outputs
+model_output = fastsa.model_function(param_set, PlantX, input_data, parameters_df, problem)
+
+# Separate model output into FAST target variables and model diagnostics
+Mpxi, diagnostics = model_output[0], model_output[1]
+
+# Append target variables to output
+Mpx.append(Mpxi)
+
+# %%
+
+# %%
+fig, ax = plt.subplots(1,1,figsize=(6,4))
+ax.scatter(np.arange(Mpxi.size), Mpx, marker='s')
+ax.set_xticks(np.arange(Mpxi.size));
+ax.set_xlabel("Target variable")
+ax.set_ylabel("Output value")
+
+# %%
+
+# %%
+
+# %%
+
+# %%
+
+# %%
+
+# %%
+if write_to_nc:
+    # Write diagnostics to file
+    nsigfigures = len(str(np.shape(param_values)[0]))   # number of significant figures of parameter sets to insert zero-padded nparamset into filename 
+    # File name for writing outputs to file
+    filename_write = f"FAST_results_{xsite}_paramset{nparamset:0{nsigfigures}}.nc"
+    paramset = param_values[iparamset]
+    write_diagnostics_to_nc(PlantX, diagnostics, filepath_write, filename_write, time_axis, time_nday, time_year, problem, paramset)
+
+# %%
+
+# %%
+
+# %%
+# write_to_nc = True
+
+# # Location/site of the simulations
+# xsite = "Milgadara_2018_test1"
+
+# # Path for writing outputs to file
+# filepath_write = "/Users/alexandernorton/ANU/Projects/DAESim/DAESIM/results/FAST/"
+
+# # Create input_data for model run
+# input_data = [ODEModelSolver, time_axis, forcing_inputs, reset_days, zero_crossing_indices]
+
+# # Create output array for target variables
+# Mpx = []
+
+# # Sub-sample the FAST samples
+# nsamples = 100
+# isamples = np.array([1]) #np.arange(0,param_values.shape[0],param_values.shape[0]/nsamples,dtype=int)
+
+# for iparamset in isamples:
+#     param_set = param_values[iparamset]
+#     # Select parameter set from FAST samples
+#     nparamset = iparamset+1
+
+#     # Call the function that updates parameters, runs the model and returns selected outputs
+#     model_output = model_function(param_set, PlantX, input_data, parameters_df, problem)
+    
+#     # Separate model output into FAST target variables and model diagnostics
+#     Mpxi, diagnostics = model_output[0], model_output[1]
+
+#     # Append target variables to output
+#     Mpx.append(Mpxi)
+    
+#     if write_to_nc:
+#         # Write diagnostics to file
+#         nsigfigures = len(str(np.shape(param_values)[0]))   # number of significant figures of parameter sets to insert zero-padded nparamset into filename 
+#         # File name for writing outputs to file
+#         filename_write = f"FAST_results_{xsite}_paramset{nparamset:0{nsigfigures}}.nc"
+#         paramset = param_values[iparamset]
+#         write_diagnostics_to_nc(PlantX, diagnostics, filepath_write, filename_write, time_axis, time_nday, time_year, problem, paramset)
 
 # %%

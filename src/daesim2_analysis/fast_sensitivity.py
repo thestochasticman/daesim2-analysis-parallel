@@ -7,6 +7,8 @@ from netCDF4 import date2num
 from datetime import datetime, timedelta
 import time
 import subprocess
+import numpy as np
+import pandas as pd
 
 def run_model_and_get_outputs(Plant, ODEModelSolver, time_axis, forcing_inputs, reset_days, zero_crossing_indices):
     ## Define the callable calculator that defines the right-hand-side ODE function
@@ -47,17 +49,17 @@ def run_model_and_get_outputs(Plant, ODEModelSolver, time_axis, forcing_inputs, 
     _tr_Seed = np.zeros(diagnostics['t'].size)
     for it, t in enumerate(diagnostics['t']):
         if np.isnan(diagnostics['idevphase_numeric'][it]):
-            tr_ = PlantX.PlantDev.turnover_rates[-1]
-            _tr_Leaf[it] = tr_[PlantX.PlantDev.ileaf]
-            _tr_Root[it] = tr_[PlantX.PlantDev.iroot]
-            _tr_Stem[it] = tr_[PlantX.PlantDev.istem]
-            _tr_Seed[it] = tr_[PlantX.PlantDev.iseed]
+            tr_ = Plant.PlantDev.turnover_rates[-1]
+            _tr_Leaf[it] = tr_[Plant.PlantDev.ileaf]
+            _tr_Root[it] = tr_[Plant.PlantDev.iroot]
+            _tr_Stem[it] = tr_[Plant.PlantDev.istem]
+            _tr_Seed[it] = tr_[Plant.PlantDev.iseed]
         else:
-            tr_ = PlantX.PlantDev.turnover_rates[diagnostics['idevphase'][it]]
-            _tr_Leaf[it] = tr_[PlantX.PlantDev.ileaf]
-            _tr_Root[it] = tr_[PlantX.PlantDev.iroot]
-            _tr_Stem[it] = tr_[PlantX.PlantDev.istem]
-            _tr_Seed[it] = tr_[PlantX.PlantDev.iseed]
+            tr_ = Plant.PlantDev.turnover_rates[diagnostics['idevphase'][it]]
+            _tr_Leaf[it] = tr_[Plant.PlantDev.ileaf]
+            _tr_Root[it] = tr_[Plant.PlantDev.iroot]
+            _tr_Stem[it] = tr_[Plant.PlantDev.istem]
+            _tr_Seed[it] = tr_[Plant.PlantDev.iseed]
     
     diagnostics['tr_Leaf'] = _tr_Leaf
     diagnostics['tr_Root'] = _tr_Root
@@ -95,15 +97,15 @@ def run_model_and_get_outputs(Plant, ODEModelSolver, time_axis, forcing_inputs, 
                 fstr = f"forcing {ni:02} z{iz}"
                 diagnostics[fstr] = f(time_axis)[:,iz]
 
-    total_carbon_t = res["y"][PlantX.PlantDev.ileaf,:] + res["y"][PlantX.PlantDev.istem,:] + res["y"][PlantX.PlantDev.iroot,:] + res["y"][PlantX.PlantDev.iseed,:]
-    total_carbon_exclseed_t = res["y"][PlantX.PlantDev.ileaf,:] + res["y"][PlantX.PlantDev.istem,:] + res["y"][PlantX.PlantDev.iroot,:]
+    total_carbon_t = res["y"][Plant.PlantDev.ileaf,:] + res["y"][Plant.PlantDev.istem,:] + res["y"][Plant.PlantDev.iroot,:] + res["y"][Plant.PlantDev.iseed,:]
+    total_carbon_exclseed_t = res["y"][Plant.PlantDev.ileaf,:] + res["y"][Plant.PlantDev.istem,:] + res["y"][Plant.PlantDev.iroot,:]
     
     it_peakbiomass = np.argmax(total_carbon_t)
     it_peakbiomass_exclseed = np.argmax(total_carbon_exclseed_t)
     
-    it_sowing = np.where(time_axis == PlantX.Management.sowingDay)[0][0]
-    if PlantX.Management.harvestDay is not None:
-        it_harvest = np.where(time_axis == PlantX.Management.harvestDay)[0][0]
+    it_sowing = np.where(time_axis == Plant.Management.sowingDay)[0][0]
+    if Plant.Management.harvestDay is not None:
+        it_harvest = np.where(time_axis == Plant.Management.harvestDay)[0][0]
     else:
         it_harvest = -1   # if there is no harvest day specified, we just take the last day of the simulation. 
     
@@ -121,9 +123,9 @@ def run_model_and_get_outputs(Plant, ODEModelSolver, time_axis, forcing_inputs, 
     )[0] + 1
     
     # Time index for the end of the maturity phase
-    if PlantX.PlantDev.phases.index('maturity') in idevphase:
-        it_mature = np.where(idevphase == PlantX.PlantDev.phases.index('maturity'))[0][-1]    # Index for end of maturity phase
-    elif PlantX.Management.harvestDay is not None: 
+    if Plant.PlantDev.phases.index('maturity') in idevphase:
+        it_mature = np.where(idevphase == Plant.PlantDev.phases.index('maturity'))[0][-1]    # Index for end of maturity phase
+    elif Plant.Management.harvestDay is not None: 
         it_mature = it_harvest    # Maturity developmental phase not completed, so take harvest as the end of growing season
     else:
         it_mature = -1    # if there is no harvest day specified, we just take the last day of the simulation. 
@@ -132,24 +134,24 @@ def run_model_and_get_outputs(Plant, ODEModelSolver, time_axis, forcing_inputs, 
     it_phase_transitions = [t for t in it_phase_transitions if time_axis[t] <= time_axis[it_mature]]
 
     # Developmental phase indexes
-    igermination = PlantX.PlantDev.phases.index("germination")
-    ivegetative = PlantX.PlantDev.phases.index("vegetative")
-    if PlantX.Management.cropType == "Wheat":
-        ispike = PlantX.PlantDev.phases.index("spike")
-    ianthesis = PlantX.PlantDev.phases.index("anthesis")
-    igrainfill = PlantX.PlantDev.phases.index("grainfill")
-    imaturity = PlantX.PlantDev.phases.index("maturity")
+    igermination = Plant.PlantDev.phases.index("germination")
+    ivegetative = Plant.PlantDev.phases.index("vegetative")
+    if Plant.Management.cropType == "Wheat":
+        ispike = Plant.PlantDev.phases.index("spike")
+    ianthesis = Plant.PlantDev.phases.index("anthesis")
+    igrainfill = Plant.PlantDev.phases.index("grainfill")
+    imaturity = Plant.PlantDev.phases.index("maturity")
 
     # Carbon and Water
-    W_P_peakW = total_carbon_t[it_peakbiomass]/PlantX.PlantCH2O.f_C    # Total dry biomass at peak biomass
-    W_L_peakW = res["y"][PlantX.PlantDev.ileaf,it_peakbiomass]/PlantX.PlantCH2O.f_C    # Leaf dry biomass at peak biomass
-    W_R_peakW = res["y"][PlantX.PlantDev.istem,it_peakbiomass]/PlantX.PlantCH2O.f_C    # Root dry biomass at peak biomass
-    W_S_peakW = res["y"][PlantX.PlantDev.iroot,it_peakbiomass]/PlantX.PlantCH2O.f_C    # Stem dry biomass at peak biomass
-    if PlantX.Management.cropType == "Wheat":
-        ip = np.where(diagnostics['idevphase'][it_phase_transitions] == PlantX.PlantDev.phases.index('spike'))[0][0]
-        W_S_spike0 = res["y"][PlantX.PlantDev.istem,it_phase_transitions[ip]]/PlantX.PlantCH2O.f_C    # Stem dry biomass at start of spike
-    ip = np.where(diagnostics['idevphase'][it_phase_transitions] == PlantX.PlantDev.phases.index('anthesis'))[0][0]
-    W_S_anth0 = res["y"][PlantX.PlantDev.istem,it_phase_transitions[ip]]/PlantX.PlantCH2O.f_C    # Stem dry biomass at start of anthesis
+    W_P_peakW = total_carbon_t[it_peakbiomass]/Plant.PlantCH2O.f_C    # Total dry biomass at peak biomass
+    W_L_peakW = res["y"][Plant.PlantDev.ileaf,it_peakbiomass]/Plant.PlantCH2O.f_C    # Leaf dry biomass at peak biomass
+    W_R_peakW = res["y"][Plant.PlantDev.istem,it_peakbiomass]/Plant.PlantCH2O.f_C    # Root dry biomass at peak biomass
+    W_S_peakW = res["y"][Plant.PlantDev.iroot,it_peakbiomass]/Plant.PlantCH2O.f_C    # Stem dry biomass at peak biomass
+    if Plant.Management.cropType == "Wheat":
+        ip = np.where(diagnostics['idevphase'][it_phase_transitions] == Plant.PlantDev.phases.index('spike'))[0][0]
+        W_S_spike0 = res["y"][Plant.PlantDev.istem,it_phase_transitions[ip]]/Plant.PlantCH2O.f_C    # Stem dry biomass at start of spike
+    ip = np.where(diagnostics['idevphase'][it_phase_transitions] == Plant.PlantDev.phases.index('anthesis'))[0][0]
+    W_S_anth0 = res["y"][Plant.PlantDev.istem,it_phase_transitions[ip]]/Plant.PlantCH2O.f_C    # Stem dry biomass at start of anthesis
     GPP_int_seas = np.sum(diagnostics['GPP'][it_sowing:it_mature+1])    # Total (integrated) seasonal GPP
     NPP_int_seas = np.sum(diagnostics['NPP'][it_sowing:it_mature+1])    # Total (integrated) seasonal NPP
     Rml_int_seas = np.sum(diagnostics['Rml'][it_sowing:it_mature+1])    # Total (integrated) seasonal Rml
@@ -163,14 +165,14 @@ def run_model_and_get_outputs(Plant, ODEModelSolver, time_axis, forcing_inputs, 
     LAI_peakW = diagnostics['LAI'][it_peakbiomass]    # Leaf area index at peak biomass
     
     # Grain Production
-    W_spike_anth1 = res["y"][7,it_mature]/PlantX.PlantCH2O.f_C    # Spike dry biomass at anthesis
-    GY_mature = res["y"][PlantX.PlantDev.iseed,it_mature]/PlantX.PlantCH2O.f_C    # Grain yield at maturity
-    GY_harvest = res["y"][PlantX.PlantDev.iseed,it_harvest]/PlantX.PlantCH2O.f_C    # Grain yield at harvest
+    W_spike_anth1 = res["y"][7,it_mature]/Plant.PlantCH2O.f_C    # Spike dry biomass at anthesis
+    GY_mature = res["y"][Plant.PlantDev.iseed,it_mature]/Plant.PlantCH2O.f_C    # Grain yield at maturity
+    GY_harvest = res["y"][Plant.PlantDev.iseed,it_harvest]/Plant.PlantCH2O.f_C    # Grain yield at harvest
     Sdpot_mature = diagnostics['S_d_pot'][it_mature]    # Potential seed density (grain number density) at maturity
     Sdpot_harvest = diagnostics['S_d_pot'][it_harvest]    # Potential seed density (grain number density) at harvest
-    if PlantX.Management.cropType == "Wheat":
-        GN_mature = res["y"][PlantX.PlantDev.iseed,it_mature]/PlantX.PlantCH2O.f_C/PlantX.W_seedTKW0    # Actual grain number at maturity
-        GN_harvest = res["y"][PlantX.PlantDev.iseed,it_harvest]/PlantX.PlantCH2O.f_C/PlantX.W_seedTKW0    # Actual grain number at harvest
+    if Plant.Management.cropType == "Wheat":
+        GN_mature = res["y"][Plant.PlantDev.iseed,it_mature]/Plant.PlantCH2O.f_C/Plant.W_seedTKW0    # Actual grain number at maturity
+        GN_harvest = res["y"][Plant.PlantDev.iseed,it_harvest]/Plant.PlantCH2O.f_C/Plant.W_seedTKW0    # Actual grain number at harvest
     
     # Model output (of observables) given the parameter vector p
     # - this is the model output that we compare to observations and use to calibrate the parameters
@@ -278,13 +280,66 @@ def model_function(params, Plant, input_data, params_info, problem):
 
     # Collate input data to pass to model run function
     ODEModelSolver, time_axis, forcing_inputs, reset_days, zero_crossing_indices = input_data
-    # Make sure the solver knows about the sowing and harvest dates as well (to reset the state variables like GDD and VD)
+    # N.B. If any of the parameters are sowingDay or harvestDay, we must make sure the solver knows about the sowing and harvest dates as well (to reset the state variables like GDD and VD)
     # reset_days = [Plant.Management.sowingDay, Plant.Management.harvestDay]
     
     model_output = run_model_and_get_outputs(Plant, ODEModelSolver, time_axis, forcing_inputs, reset_days, zero_crossing_indices)
 
     return model_output
 
+def update_and_run_model(param_values, model_instance, input_data, param_info, salib_problem):
+    """
+    Updates model parameters, runs the biophysical model, and returns the outputs.
+
+    Parameters
+    ----------
+    param_values : array_like
+        Vector of parameter values to be updated in the model.
+    model_instance : object
+        Instance of the model class that includes methods for running simulations.
+    input_data : tuple
+        A tuple containing input data required for the model run, structured as:
+        (ODEModelSolver, time_axis, forcing_inputs, reset_days, zero_crossing_indices).
+    param_info : pd.DataFrame
+        DataFrame with parameter metadata, including:
+        - "Name": Parameter name as used in the model.
+        - "Module Path": Path to the model attribute to update (e.g., "Plant.Parameters").
+        - "Phase Specific": Boolean indicating whether the parameter is specific to a growth phase.
+        - "Phase": (Optional) Index of the growth phase if "Phase Specific" is True.
+    salib_problem : dict
+        Dictionary required for SALib sensitivity analysis. Includes:
+        - "num_vars": Number of parameters.
+        - "names": List of parameter names.
+        - "bounds": List of parameter bounds.
+
+    Returns
+    -------
+    array_like
+        Model outputs after running the simulation.
+    """
+    # Update the model instance with the provided parameters
+    for idx, value in enumerate(param_values):
+        param_name = salib_problem["names"][idx]
+        param_path = param_info.loc[param_info["Name"] == param_name, "Module Path"].values[0]
+        full_path = f"{param_path}.{param_name}"
+
+        if param_info.loc[param_info["Name"] == param_name, "Phase Specific"].values[0]:
+            # Handle phase-specific parameters
+            phase = param_info.loc[param_info["Name"] == param_name, "Phase"].values[0]
+            update_attribute_in_phase(model_instance, full_path, value, phase)
+        else:
+            # Update regular parameters
+            update_attribute(model_instance, full_path, value)
+
+    # Unpack input data
+    ODEModelSolver, time_axis, forcing_inputs, reset_days, zero_crossing_indices = input_data
+
+    # Run the model and get the outputs
+    model_outputs = run_model_and_get_outputs(
+        model_instance, ODEModelSolver, time_axis, forcing_inputs, reset_days, zero_crossing_indices
+    )
+
+    return model_outputs
 
 def write_diagnostics_to_nc(Model, model_diagnostics, filepath, filename, time_axis, time_nday, time_year, problem, param_values):
     # Create datetimes for writing the netcdf
