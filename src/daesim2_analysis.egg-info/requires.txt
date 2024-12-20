@@ -1,6 +1,0 @@
-numpy
-scipy
-matplotlib
-pandas
-SALib
-daesim@ git+https://github.com/NortonAlex/DAESIM@b09baa315c7697279f4c37349f45ca79d101edbb#egg=daesim
