@@ -76,16 +76,17 @@ from daesim2_analysis import fast_sensitivity as fastsa
 
 # %%
 ## Parameters
-parameter_modulepath = ["PlantCH2O.CanopyGasExchange.Leaf", "PlantCH2O.CanopyGasExchange.Leaf", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantDev"]
-parameter_module = ["Leaf", "Leaf", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantDev"]
-parameter_names  = ["Vcmax_opt", "g1", "SLA", "maxLAI", "ksr_coeff", "gdd_requirements"]
-parameter_units  = ["mol CO2 m-2 s-1", "kPa^0.5", "m2 g d.wt-1", "m2 m-2", "g d.wt-1 m-1", "deg C d"]
-parameter_init   = [60e-6, 3, 0.03, 6, 1000, 900]
-parameter_min    = [30e-6, 1, 0.015, 5, 300, 600]
-parameter_max    = [120e-6, 7, 0.035, 7, 5000, 1800]
-parameter_phase_specific = [False, False, False, False, False, True]
-parameter_phase = [None, None, None, None, None, "vegetative"] 
+parameter_modulepath = ["PlantCH2O.CanopyGasExchange.Leaf", "PlantCH2O.CanopyGasExchange.Leaf", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantDev", "PlantDev", "", ""]
+parameter_module = ["Leaf", "Leaf", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantDev", "PlantDev", "", ""]
+parameter_names  = ["Vcmax_opt", "g1", "SLA", "maxLAI", "ksr_coeff", "Psi_f", "gdd_requirements", "gdd_requirements", "GY_FE", "GY_SDW_50"]
+parameter_units  = ["mol CO2 m-2 s-1", "kPa^0.5", "m2 g d.wt-1", "m2 m-2", "g d.wt-1 m-1", "MPa", "deg C d", "deg C d", "thsnd grains g d.wt spike-1", "g d.wt m-2"]
+parameter_init   = [60e-6, 3, 0.03, 6, 1000, -1.5, 900, 650, 0.1, 100]
+parameter_min    = [30e-6, 1, 0.015, 5, 300, -4.0, 600, 350, 0.08, 80]
+parameter_max    = [120e-6, 6, 0.035, 7, 5000, -1.0, 1800, 700, 0.21, 150]
+parameter_phase_specific = [False, False, False, False, False, False, True, True, False, False]
+parameter_phase = [None, None, None, None, None, None, "vegetative", "grainfill", None, None]
 
+# %%
 # Check if all parameter vectors have the same length
 lengths = [len(parameter_modulepath), len(parameter_module), len(parameter_names), len(parameter_units), len(parameter_init), len(parameter_min), len(parameter_max)]
 # Print result of the length check
@@ -233,8 +234,8 @@ _soilTheta = f_soilTheta_norm
 nlevmlsoil = 2
 _soilTheta_z = np.repeat(_soilTheta[:, np.newaxis], nlevmlsoil, axis=1)
 ## Option 2: Adjust soil moisture in each layer
-_soilTheta_z0 = _soilTheta-0.04
-_soilTheta_z1 = _soilTheta+0.04
+_soilTheta_z0 = _soilTheta-0.06
+_soilTheta_z1 = _soilTheta+0.02
 _soilTheta_z = np.column_stack((_soilTheta_z0, _soilTheta_z1))
 
 # %%
@@ -271,8 +272,8 @@ PlantDevX = PlantGrowthPhases(
     allocation_coeffs = [
         [0.2, 0.1, 0.7, 0.0, 0.0],
         [0.5, 0.1, 0.4, 0.0, 0.0],
-        [0.20, 0.6, 0.20, 0.0, 0.0],
-        [0.25, 0.5, 0.25, 0.0, 0.0],
+        [0.30, 0.4, 0.30, 0.0, 0.0],
+        [0.30, 0.4, 0.30, 0.0, 0.0],
         [0.1, 0.1, 0.1, 0.7, 0.0],
         [0.1, 0.1, 0.1, 0.7, 0.0]
     ],
@@ -307,7 +308,7 @@ PlantX = PlantModuleCalculator(
     Vmaxremob=3.0,
     Kmremob=0.5,
     remob_phase=["grainfill","maturity"],
-    specified_phase="anthesis",
+    specified_phase="spike",
     grainfill_phase=["grainfill","maturity"],
 )
 
@@ -340,76 +341,10 @@ zero_crossing_indices = [4,5,6]
 # Once you have the samples, you can evaluate your model at each of the sampled input points. This typically involves running a loop where each set of sampled inputs is passed through the model, and the output (or outputs) is recorded.
 
 # %%
-write_to_nc = True
-
-# Location/site of the simulations
-xsite = "Milgadara_2021_test1"
-
-# Path for writing outputs to file
-filepath_write = "/Users/alexandernorton/ANU/Projects/DAESim/DAESIM/results/FAST/"
-
-# Create input_data for model run
-input_data = [ODEModelSolver, time_axis, forcing_inputs, reset_days, zero_crossing_indices]
-
-# Create output array for target variables
-Mpx = []
-
-# Sub-sample the FAST samples
-nsamples = 100
-isamples = np.array([1]) #np.arange(0,param_values.shape[0],param_values.shape[0]/nsamples,dtype=int)
-
-iparamset = 0
-# for iparamset in isamples:
-param_set = param_values[iparamset]
-# Select parameter set from FAST samples
-nparamset = iparamset+1
-
-# Call the function that updates parameters, runs the model and returns selected outputs
-model_output = fastsa.model_function(param_set, PlantX, input_data, parameters_df, problem)
-
-# Separate model output into FAST target variables and model diagnostics
-Mpxi, diagnostics = model_output[0], model_output[1]
-
-# Append target variables to output
-Mpx.append(Mpxi)
-
-# %%
-
-# %%
-fig, ax = plt.subplots(1,1,figsize=(6,4))
-ax.scatter(np.arange(Mpxi.size), Mpx, marker='s')
-ax.set_xticks(np.arange(Mpxi.size));
-ax.set_xlabel("Target variable")
-ax.set_ylabel("Output value")
-
-# %%
-
-# %%
-
-# %%
-
-# %%
-
-# %%
-
-# %%
-if write_to_nc:
-    # Write diagnostics to file
-    nsigfigures = len(str(np.shape(param_values)[0]))   # number of significant figures of parameter sets to insert zero-padded nparamset into filename 
-    # File name for writing outputs to file
-    filename_write = f"FAST_results_{xsite}_paramset{nparamset:0{nsigfigures}}.nc"
-    paramset = param_values[iparamset]
-    write_diagnostics_to_nc(PlantX, diagnostics, filepath_write, filename_write, time_axis, time_nday, time_year, problem, paramset)
-
-# %%
-
-# %%
-
-# %%
-# write_to_nc = True
+# write_to_nc = False
 
 # # Location/site of the simulations
-# xsite = "Milgadara_2018_test1"
+# xsite = "Milgadara_2021_test_single"
 
 # # Path for writing outputs to file
 # filepath_write = "/Users/alexandernorton/ANU/Projects/DAESim/DAESIM/results/FAST/"
@@ -424,26 +359,101 @@ if write_to_nc:
 # nsamples = 100
 # isamples = np.array([1]) #np.arange(0,param_values.shape[0],param_values.shape[0]/nsamples,dtype=int)
 
-# for iparamset in isamples:
-#     param_set = param_values[iparamset]
-#     # Select parameter set from FAST samples
-#     nparamset = iparamset+1
+# iparamset = 1
+# # for iparamset in isamples:
+# param_set = param_values[iparamset]
+# # Select parameter set from FAST samples
+# nparamset = iparamset+1
 
-#     # Call the function that updates parameters, runs the model and returns selected outputs
-#     model_output = model_function(param_set, PlantX, input_data, parameters_df, problem)
-    
-#     # Separate model output into FAST target variables and model diagnostics
-#     Mpxi, diagnostics = model_output[0], model_output[1]
+# # Call the function that updates parameters, runs the model and returns selected outputs
+# model_output = fastsa.update_and_run_model(param_set, PlantX, input_data, parameters_df, problem)
 
-#     # Append target variables to output
-#     Mpx.append(Mpxi)
+# # Separate model output into FAST target variables and model diagnostics
+# Mpxi, diagnostics = model_output[0], model_output[1]
+
+# # Append target variables to output
+# Mpx.append(np.insert(Mpxi, 0, nparamset))
+
+# if write_to_nc:
+#     # Write diagnostics to file
+#     nsigfigures = len(str(np.shape(param_values)[0]))   # number of significant figures of parameter sets to insert zero-padded nparamset into filename 
+#     # File name for writing outputs to file
+#     filename_write = f"FAST_results_{xsite}_paramset{nparamset:0{nsigfigures}}.nc"
+#     paramset = param_values[iparamset]
+#     fastsa.write_diagnostics_to_nc(PlantX, diagnostics, filepath_write, filename_write, time_axis, time_nday, time_year, time_doy, problem, paramset)
+
+# %%
+write_to_nc = True
+
+# Location/site of the simulations
+xsite = "Milgadara_2018_test"
+
+# Path for writing outputs to file
+filepath_write = "/Users/alexandernorton/ANU/Projects/DAESim/DAESIM/results/FAST/"
+
+# Create input_data for model run
+input_data = [ODEModelSolver, time_axis, forcing_inputs, reset_days, zero_crossing_indices]
+
+# Create output array for target variables
+Mpx_column_headers = "nparamset,W_P_peakW,W_L_peakW,W_R_peakW,W_S_peakW,W_S_spike0,W_S_anth0,GPP_int_seas,NPP_int_seas,Rml_int_seas,Rmr_int_seas,Rg_int_seas,trflux_int_seas,FCstem2grain_int_seas,NPP2grain_int_seas,E_int_seas,LAI_peakW,W_spike_anth1,GY_mature,Sdpot_mature,GN_mature"   # to save as header in csv file. N.B. must match the custom output in the update_and_run_model function
+Mpx = []
+
+# Option: Run a sub-sample of the FAST samples
+# nsamples = 300
+# isamples = np.arange(0,param_values.shape[0],param_values.shape[0]/nsamples,dtype=int)
+
+# Option: Run the full set of FAST samples
+nsamples = param_values.shape[0]
+
+for iparamset in range(nsamples):
+    param_set = param_values[iparamset]
+    # Select parameter set from FAST samples
+    nparamset = iparamset+1
+
+    # Call the function that updates parameters, runs the model and returns selected outputs
+    model_output = fastsa.update_and_run_model(param_set, PlantX, input_data, parameters_df, problem)
     
-#     if write_to_nc:
-#         # Write diagnostics to file
-#         nsigfigures = len(str(np.shape(param_values)[0]))   # number of significant figures of parameter sets to insert zero-padded nparamset into filename 
-#         # File name for writing outputs to file
-#         filename_write = f"FAST_results_{xsite}_paramset{nparamset:0{nsigfigures}}.nc"
-#         paramset = param_values[iparamset]
-#         write_diagnostics_to_nc(PlantX, diagnostics, filepath_write, filename_write, time_axis, time_nday, time_year, problem, paramset)
+    # Separate model output into FAST target variables and model diagnostics
+    Mpxi, diagnostics = model_output[0], model_output[1]
+
+    # Append target variables to output, inserting nparamset as the first element
+    Mpx.append(np.insert(Mpxi, 0, nparamset))
+    
+    if write_to_nc:
+        # Write diagnostics to file
+        nsigfigures = len(str(np.shape(param_values)[0]))   # number of significant figures of parameter sets to insert zero-padded nparamset into filename 
+        # File name for writing outputs to file
+        filename_write = f"FAST_results_{xsite}_paramset{nparamset:0{nsigfigures}}.nc"
+        paramset = param_values[iparamset]
+        fastsa.write_diagnostics_to_nc(PlantX, diagnostics, filepath_write, filename_write, time_axis, time_nday, time_year, time_doy, problem, paramset)
+
+# Write the target variables data to a csv file
+fname_target_variables = f"{filepath_write}FAST_results_{xsite}_target_variables.csv"
+np.savetxt(fname_target_variables, np.array(Mpx), delimiter=",")
+
+
+# %%
+# W_P_peakW = [Mpx[ipar][0] for ipar in range(len(Mpx))]
+# W_L_peakW = [Mpx[ipar][1] for ipar in range(len(Mpx))]
+# W_R_peakW = [Mpx[ipar][2] for ipar in range(len(Mpx))]
+# W_S_peakW = [Mpx[ipar][3] for ipar in range(len(Mpx))]
+# W_S_spike0 = [Mpx[ipar][4] for ipar in range(len(Mpx))]
+# W_S_anth0 = [Mpx[ipar][5] for ipar in range(len(Mpx))]
+# GPP_int_seas = [Mpx[ipar][6] for ipar in range(len(Mpx))]
+# NPP_int_seas = [Mpx[ipar][7] for ipar in range(len(Mpx))]
+# Rml_int_seas = [Mpx[ipar][8] for ipar in range(len(Mpx))]
+# Rmr_int_seas = [Mpx[ipar][9] for ipar in range(len(Mpx))]
+# Rg_int_seas = [Mpx[ipar][10] for ipar in range(len(Mpx))]
+# trflux_int_seas = [Mpx[ipar][11] for ipar in range(len(Mpx))]
+# FCstem2grain_int_seas = [Mpx[ipar][12] for ipar in range(len(Mpx))]
+# NPP2grain_int_seas = [Mpx[ipar][13] for ipar in range(len(Mpx))]
+# E_int_seas = [Mpx[ipar][14] for ipar in range(len(Mpx))]
+# LAI_peakW = [Mpx[ipar][15] for ipar in range(len(Mpx))]
+# W_spike_anth1 = [Mpx[ipar][16] for ipar in range(len(Mpx))]
+# GY_mature = [Mpx[ipar][17] for ipar in range(len(Mpx))]
+# Sdpot_mature = [Mpx[ipar][18] for ipar in range(len(Mpx))]
+# GN_mature = [Mpx[ipar][19] for ipar in range(len(Mpx))]
+
+# %%
 
 # %%
