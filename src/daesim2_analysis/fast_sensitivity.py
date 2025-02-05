@@ -97,41 +97,59 @@ def run_model_and_get_outputs(Plant, ODEModelSolver, time_axis, forcing_inputs, 
                 fstr = f"forcing {ni:02} z{iz}"
                 diagnostics[fstr] = f(time_axis)[:,iz]
 
-    total_carbon_t = res["y"][Plant.PlantDev.ileaf,:] + res["y"][Plant.PlantDev.istem,:] + res["y"][Plant.PlantDev.iroot,:] + res["y"][Plant.PlantDev.iseed,:]
-    total_carbon_exclseed_t = res["y"][Plant.PlantDev.ileaf,:] + res["y"][Plant.PlantDev.istem,:] + res["y"][Plant.PlantDev.iroot,:]
-    
-    it_peakbiomass = np.argmax(total_carbon_t)
-    it_peakbiomass_exclseed = np.argmax(total_carbon_exclseed_t)
-    
-    it_sowing = np.where(time_axis == Plant.Management.sowingDay)[0][0]
-    if Plant.Management.harvestDay is not None:
-        it_harvest = np.where(time_axis == Plant.Management.harvestDay)[0][0]
+    ngrowing_seasons = (len(Plant.Management.sowingDays) if (isinstance(Plant.Management.sowingDays, int) == False) else 1)
+
+    if ngrowing_seasons > 1:
+        print("Multiple sowing and harvest events occur. Only returning results for first growing season.")
+        ## ignore any time steps before first sowing event and after last harvest event
+        it_sowing = np.where(time_axis == reset_days[0])[0][0]  #sowing_steps_itax[0]
+        
+        if Plant.Management.harvestDays is not None:
+            it_harvest = np.where(time_axis == reset_days[1])[0][0]  #harvest_steps_itax[0]   # np.where(np.floor(Climate_doy_f(time_axis)) == Plant.Management.harvestDay)[0][0]
+        else:
+            it_harvest = -1   # if there is no harvest day specified, we just take the last day of the simulation. 
+
+        total_carbon_t = res["y"][Plant.PlantDev.ileaf,:] + res["y"][Plant.PlantDev.istem,:] + res["y"][Plant.PlantDev.iroot,:] + res["y"][Plant.PlantDev.iseed,:]
+        total_carbon_exclseed_t = res["y"][Plant.PlantDev.ileaf,:] + res["y"][Plant.PlantDev.istem,:] + res["y"][Plant.PlantDev.iroot,:]
+        
+        it_peakbiomass = np.argmax(total_carbon_t[:it_harvest+1])
+        it_peakbiomass_exclseed = np.argmax(total_carbon_exclseed_t[:it_harvest+1])
     else:
-        it_harvest = -1   # if there is no harvest day specified, we just take the last day of the simulation. 
-    
+        print("Just one sowing event and one harvest event occurs. Returning results for first (and only) growing season.")
+        ## ignore any time steps before first sowing event and after last harvest event
+        it_sowing = np.where(time_axis == reset_days[0])[0][0]  #sowing_steps_itax[0]
+        
+        if Plant.Management.harvestDays is not None:
+            it_harvest = np.where(time_axis == reset_days[1])[0][0]  #harvest_steps_itax[0]   # np.where(np.floor(Climate_doy_f(time_axis)) == Plant.Management.harvestDay)[0][0]
+        else:
+            it_harvest = -1   # if there is no harvest day specified, we just take the last day of the simulation. 
+
+        total_carbon_t = res["y"][Plant.PlantDev.ileaf,:] + res["y"][Plant.PlantDev.istem,:] + res["y"][Plant.PlantDev.iroot,:] + res["y"][Plant.PlantDev.iseed,:]
+        total_carbon_exclseed_t = res["y"][Plant.PlantDev.ileaf,:] + res["y"][Plant.PlantDev.istem,:] + res["y"][Plant.PlantDev.iroot,:]
+        
+        it_peakbiomass = np.argmax(total_carbon_t[it_sowing:it_harvest+1]) + it_sowing
+        it_peakbiomass_exclseed = np.argmax(total_carbon_exclseed_t[it_sowing:it_harvest+1]) + it_sowing
+
     # Diagnose time indexes when developmental phase transitions occur
-    
+
     # Convert the array to a numeric type, handling mixed int and float types
-    idevphase = diagnostics["idevphase_numeric"]
+    idevphase = diagnostics["idevphase_numeric"][it_sowing:it_harvest+1]
     valid_mask = ~np.isnan(idevphase)
-    
+
     # Identify all transitions (number-to-NaN, NaN-to-number, or number-to-different-number)
     it_phase_transitions = np.where(
         ~valid_mask[:-1] & valid_mask[1:] |  # NaN-to-number
         valid_mask[:-1] & ~valid_mask[1:] |  # Number-to-NaN
         (valid_mask[:-1] & valid_mask[1:] & (np.diff(idevphase) != 0))  # Number-to-different-number
     )[0] + 1
-    
+
     # Time index for the end of the maturity phase
     if Plant.PlantDev.phases.index('maturity') in idevphase:
         it_mature = np.where(idevphase == Plant.PlantDev.phases.index('maturity'))[0][-1]    # Index for end of maturity phase
-    elif Plant.Management.harvestDay is not None: 
+    elif Plant.Management.harvestDays is not None: 
         it_mature = it_harvest    # Maturity developmental phase not completed, so take harvest as the end of growing season
     else:
         it_mature = -1    # if there is no harvest day specified, we just take the last day of the simulation. 
-
-    # Filter out transitions that occur after the maturity or harvest day
-    it_phase_transitions = [t for t in it_phase_transitions if time_axis[t] <= time_axis[it_mature]]
 
     # Developmental phase indexes
     igermination = Plant.PlantDev.phases.index("germination")
