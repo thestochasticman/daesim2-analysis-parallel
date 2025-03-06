@@ -119,174 +119,139 @@ if not IS_INTERACTIVE:
       help="Path to the directory for storing FAST SA results"
   )
   group2.add_argument(
-      '--xsite',
+      '--paths_df_forcing',
       type=str,
       required=True,
       help='name of site'
   )
-  group2.add_argument(
-      '--paths_df_forcing',
-      nargs='+',
-      required=True,
-      help='list of paths to files containing forcing data'
-  )
-
   args = parser.parse_args()
 
-  n_processes     : int = args.n_processes
-  n_samples       : int = args.n_samples
-  dir_results     : str = args.dir_results
-  xsite           : str = args.xsite
-  paths_df_forcing: str = args.paths_df_forcing
-  n_samples       : int = args.n_samples
-else:
-  n_processes     : int = 4
-  n_samples       : int = 600
-  dir_results     : str = '/g/data/xe2/ya6227/DAESIM/results/'
-  xsite           : str = 'Milgadara_2018_test'
-  paths_df_forcing: str = [
-                            '/g/data/xe2/ya6227/DAESIM/example_dfs/DAESim_forcing_Milgadara_2018.csv',
-                            '/g/data/xe2/ya6227/DAESIM/example_dfs/DAESim_forcing_Milgadara_2019.csv'
-                          ]
+  n_processes       : int = args.n_processes
+  n_samples         : int = args.n_samples
+  dir_results       : str = args.dir_results
+  paths_df_forcing  : list[str] = args.paths_df_forcing.split(',')
 
-dir_xsite_results = ''.join([dir_results, xsite])
-filepath_write = ''.join([dir_xsite_results, 'parameters/'])
-makedirs(filepath_write, exist_ok=True)
-path_mpx = ''.join([filepath_write, xsite + '_Mpx'])
-print(path_mpx)
-# # %% [markdown]
-# # ### Step 2. Define the model problem
+else:
+  n_processes       : int = 4
+  n_samples         : int = 600
+  dir_results       : str = '/g/data/xe2/ya6227/daesim2-analysis-data'
+  paths_df_forcing  : list[str] = ['/g/data/xe2/ya6227/daesim2-analysis-data/DAESim_forcing_data/Rutherglen_1971.csv']
+
+# xsite = '-'.join(xsites)
+xsite = '-'.join([path.split('/')[-1].split('.')[0] for path in paths_df_forcing])
+dir_xsite_FAST_results = '/'.join([dir_results, xsite])
+dir_xsite_parameters = '/'.join([dir_xsite_FAST_results, 'parameters'])
+path_Mpx = '/'.join([dir_xsite_FAST_results, 'Mpx.npy'])
+makedirs(dir_xsite_FAST_results, exist_ok=True)
+
+# %% [markdown]
+# ### Step 2. Define the model problem
 # #
-# # Need to define the number of parameters, their names, and the ranges (bounds) over which the sensitivity analysis will be performed. For example, if your model has three parameters (e.g., param1, param2, param3), you would define the problem in the following format:
+# Need to define the number of parameters, their names, and the ranges (bounds) over which the sensitivity analysis will be performed. For example, if your model has three parameters (e.g., param1, param2, param3), you would define the problem in the following format:
 # #
-# # This includes both model parameters (e.g. here this includes Vcmax_opt, Jmax_opt, g1) and the forcing data ranges (e.g. here this includes T, Q, fgsw).
+# This includes both model parameters (e.g. here this includes Vcmax_opt, Jmax_opt, g1) and the forcing data ranges (e.g. here this includes T, Q, fgsw).
 
 # # %%
 # ## Parameters
-# # parameter_modulepath = ["PlantCH2O.CanopyGasExchange.Leaf", "PlantCH2O.CanopyGasExchange.Leaf", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantDev", "PlantDev", "", ""]
-# # parameter_module = ["Leaf", "Leaf", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantDev", "PlantDev", "", ""]
-# # parameter_names  = ["Vcmax_opt", "g1", "SLA", "maxLAI", "ksr_coeff", "Psi_f", "gdd_requirements", "gdd_requirements", "GY_FE", "GY_SDW_50"]
-# # parameter_units  = ["mol CO2 m-2 s-1", "kPa^0.5", "m2 g d.wt-1", "m2 m-2", "g d.wt-1 m-1", "MPa", "deg C d", "deg C d", "thsnd grains g d.wt spike-1", "g d.wt m-2"]
-# # parameter_init   = [60e-6, 3, 0.03, 6, 1000, -1.5, 900, 650, 0.1, 100]
-# # parameter_min    = [30e-6, 1, 0.015, 5, 300, -4.0, 600, 350, 0.08, 80]
-# # parameter_max    = [120e-6, 6, 0.035, 7, 5000, -1.0, 1800, 700, 0.21, 150]
-# # parameter_phase_specific = [False, False, False, False, False, False, True, True, False, False]
-# # parameter_phase = [None, None, None, None, None, None, "vegetative", "grainfill", None, None]
+parameter_modulepath = ["PlantCH2O.CanopyGasExchange.Leaf", "PlantCH2O.CanopyGasExchange.Leaf", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantDev", "PlantDev", "", "", "", ""]
+parameter_module = ["Leaf", "Leaf", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantDev", "PlantDev", "", "", "", ""]
+parameter_names  = ["Vcmax_opt", "g1", "SLA", "maxLAI", "ksr_coeff", "Psi_f", "sf", "gdd_requirements", "gdd_requirements", "GY_FE", "GY_SDW_50", "CI", "d_r_max"]
+parameter_units  = ["mol CO2 m-2 s-1", "kPa^0.5", "m2 g d.wt-1", "m2 m-2", "g d.wt-1 m-1", "MPa", "MPa-1", "deg C d", "deg C d", "thsnd grains g d.wt spike-1", "g d.wt m-2", "-", "m"]
+parameter_init   = [60e-6, 3, 0.03, 6, 1000, -3.5, 3.5, 900, 650, 0.1, 100, 0.75, 0.5]
+parameter_min    = [30e-6, 1, 0.015, 5, 300, -8.0, 1.5, 600, 350, 0.08, 80, 0.5, 0.15]
+parameter_max    = [120e-6, 6, 0.035, 7, 5000, -1.0, 7.0, 1800, 700, 0.21, 150, 1.0, 0.66]
+parameter_phase_specific = [False, False, False, False, False, False, False, True, True, False, False, False, False]
+parameter_phase = [None, None, None, None, None, None, None, "vegetative", "grainfill", None, None, None, None]
 
-# parameter_modulepath = ["PlantCH2O.CanopyGasExchange.Leaf", "PlantCH2O.CanopyGasExchange.Leaf", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantDev", "PlantDev", "", "", "", ""]
-# parameter_module = ["Leaf", "Leaf", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantCH2O", "PlantDev", "PlantDev", "", "", "", ""]
-# parameter_names  = ["Vcmax_opt", "g1", "SLA", "maxLAI", "ksr_coeff", "Psi_f", "sf", "gdd_requirements", "gdd_requirements", "GY_FE", "GY_SDW_50", "CI", "d_r_max"]
-# parameter_units  = ["mol CO2 m-2 s-1", "kPa^0.5", "m2 g d.wt-1", "m2 m-2", "g d.wt-1 m-1", "MPa", "MPa-1", "deg C d", "deg C d", "thsnd grains g d.wt spike-1", "g d.wt m-2", "-", "m"]
-# parameter_init   = [60e-6, 3, 0.03, 6, 1000, -3.5, 3.5, 900, 650, 0.1, 100, 0.75, 0.5]
-# parameter_min    = [30e-6, 1, 0.015, 5, 300, -8.0, 1.5, 600, 350, 0.08, 80, 0.5, 0.15]
-# parameter_max    = [120e-6, 6, 0.035, 7, 5000, -1.0, 7.0, 1800, 700, 0.21, 150, 1.0, 0.66]
-# parameter_phase_specific = [False, False, False, False, False, False, False, True, True, False, False, False, False]
-# parameter_phase = [None, None, None, None, None, None, None, "vegetative", "grainfill", None, None, None, None]
-
-# # %%
-# # Check if all parameter vectors have the same length
-# lengths = [len(parameter_modulepath), len(parameter_module), len(parameter_names), len(parameter_units), len(parameter_init), len(parameter_min), len(parameter_max)]
-# # Print result of the length check
-# if all(length == lengths[0] for length in lengths):
-#     print("All parameter vectors are of the same length.")
-# else:
-#     print("The parameter vectors are not of the same length. Lengths found:", lengths)
+# %%
+# Check if all parameter vectors have the same length
+lengths = [len(parameter_modulepath), len(parameter_module), len(parameter_names), len(parameter_units), len(parameter_init), len(parameter_min), len(parameter_max)]
+# Print result of the length check
+if all(length == lengths[0] for length in lengths):
+    print("All parameter vectors are of the same length.")
+else:
+    print("The parameter vectors are not of the same length. Lengths found:", lengths)
     
-# # Create a dataframe to combine the parameter information into one data structure
-# parameters_df = pd.DataFrame({
-#     "Module Path": parameter_modulepath,
-#     "Module": parameter_module,
-#     "Phase Specific": parameter_phase_specific,
-#     "Phase": parameter_phase,
-#     "Name": parameter_names,
-#     "Units": parameter_units,
-#     "Initial Value": parameter_init,
-#     "Min": parameter_min,
-#     "Max": parameter_max
-# })
+# Create a dataframe to combine the parameter information into one data structure
+parameters_df = pd.DataFrame({
+    "Module Path": parameter_modulepath,
+    "Module": parameter_module,
+    "Phase Specific": parameter_phase_specific,
+    "Phase": parameter_phase,
+    "Name": parameter_names,
+    "Units": parameter_units,
+    "Initial Value": parameter_init,
+    "Min": parameter_min,
+    "Max": parameter_max
+})
 
-# # Dictionary required as input to SALib FAST sampler
-# problem = {
-#     "num_vars": len(parameters_df),    # Number of input parameters
-#     "names": parameters_df["Name"].values,   # Parameter names
-#     "bounds": [[row['Min'], row['Max']] for _, row in parameters_df.iterrows()],    # Parameter ranges
-# }
+# Dictionary required as input to SALib FAST sampler
+problem = {
+    "num_vars": len(parameters_df),    # Number of input parameters
+    "names": parameters_df["Name"].values,   # Parameter names
+    "bounds": [[row['Min'], row['Max']] for _, row in parameters_df.iterrows()],    # Parameter ranges
+}
 
-# # %% [markdown]
-# # ### Step 3. Generate the FAST Samples
-# #
-# # To apply the FAST method, you need to generate the sampling points for the input parameters using the SALib.sample.fast function. Here, you specify the total number of samples you want (it is important to choose a sufficiently large number to ensure the analysis is robust). 
-# #
-# # N.B. For a typical FAST setup:
-# #
-# # - num_samples refers to the number of frequencies used to sample each parameter.
-# # - The actual number of parameter sets generated depends on num_vars and the sampling process.
-# #
-# # The total number of samples is typically num_samples * num_vars, and thus, Y should have this size. You can adjust the setup to reflect this. 
+# %% [markdown]
+# ### Step 3. Generate the FAST Samples
+#
+# To apply the FAST method, you need to generate the sampling points for the input parameters using the SALib.sample.fast function. Here, you specify the total number of samples you want (it is important to choose a sufficiently large number to ensure the analysis is robust). 
+#
+# N.B. For a typical FAST setup:
+#
+# - num_samples refers to the number of frequencies used to sample each parameter.
+# - The actual number of parameter sets generated depends on num_vars and the sampling process.
+#
+# The total number of samples is typically num_samples * num_vars, and thus, Y should have this size. You can adjust the setup to reflect this. 
 
-# # %%
-# # Generate samples using the FAST method
-# # ### Step 3. Generate the FAST Samples
-# #
-# # To apply the FAST method, you need to generate the sampling points for the input parameters using the SALib.sample.fast function. Here, you specify the total number of samples you want (it is important to choose a sufficiently large number to ensure the analysis is robust). 
-# #
-# # N.B. For a typical FAST setup:
-# #
-# # - num_samples refers to the number of frequencies used to sample each parameter.
-# # - The actual number of parameter sets generated depends on num_vars and the sampling process.
-# #
-# # The total number of samples is typically num_samples * num_vars, and thus, Y should have this size. You can adjust the setup to reflect this.
+# %%
+# Generate samples using the FAST method
+# ### Step 3. Generate the FAST Samples
+#
+# To apply the FAST method, you need to generate the sampling points for the input parameters using the SALib.sample.fast function. Here, you specify the total number of samples you want (it is important to choose a sufficiently large number to ensure the analysis is robust). 
+#
+# N.B. For a typical FAST setup:
+#
+# - num_samples refers to the number of frequencies used to sample each parameter.
+# - The actual number of parameter sets generated depends on num_vars and the sampling process.
+#
+# The total number of samples is typically num_samples * num_vars, and thus, Y should have this size. You can adjust the setup to reflect this.
  
-# # %%
-# # Generate samples using the FAST method
-# param_values = fast_sampler.sample(problem, n_samples, seed=0)
+# %%
+# Generate samples using the FAST method
+param_values = fast_sampler.sample(problem, n_samples, seed=0)
 
-# # param_values will contain the sampled input sets for the parameters
-# print(param_values.shape)
+# param_values will contain the sampled input sets for the parameters
+print(param_values.shape)
 
-# # %% [markdown]
-# # ### Step 4. Initialise the study site and import forcing data
+# %% [markdown]
+### Step 4. Initialise the study site and import forcing data
 
-# # %%
-# def load_df_forcing(paths_df_forcing: List[str])->pd.DataFrame:
-#     dfs: List[pd.DataFrame] = []
-#     for path_df_forcing in paths_df_forcing:
-#         df = pd.read_csv(path_df_forcing)
-#         df['Date'] = pd.to_datetime(df['Date'])
-#         dfs += [df]
-#     df_forcing = pd.concat(dfs)
-#     df_forcing = df_forcing.drop_duplicates(subset='Date')
-#     df_forcing = df_forcing.sort_values(by='Date')
-#     df_forcing = df_forcing.reset_index(drop=True)
-#     df_forcing['DOY'] = df_forcing['Date'].dt.dayofyear
-#     df_forcing['Year'] = df_forcing['Date'].dt.year
-#     return df_forcing
-
-
-# df_forcing = load_df_forcing(paths_df_forcing=paths_df_forcing)
-
-# # df_forcing1 = pd.read_csv(paths_df_forcing[0])
-# # df_forcing2 = pd.read_csv(paths_df_forcing[1])
-
-# # df_forcing1['Date'] = pd.to_datetime(df_forcing1['Date'])
-# # df_forcing2['Date'] = pd.to_datetime(df_forcing2['Date'])
-
-# # # Append the new dataframe and drop duplicates based on the "Date" column
-# # df_forcing = pd.concat([df_forcing1, df_forcing2]).drop_duplicates(subset="Date").sort_values(by="Date")
-
-# # # Reset the index for the combined dataframe (optional)
-# # df_forcing.reset_index(drop=True, inplace=True)
-
-# # # Add ordinal day of year (DOY) and Year variables
-# # df_forcing["DOY"] = df_forcing["Date"].dt.dayofyear
-# # df_forcing["Year"] = df_forcing["Date"].dt.year
+# %%
+def load_df_forcing(paths_df_forcing: List[str])->pd.DataFrame:
+    dfs: List[pd.DataFrame] = []
+    for path_df_forcing in paths_df_forcing:
+        df = pd.read_csv(path_df_forcing)
+        df['Date'] = pd.to_datetime(df['Date'])
+        dfs += [df]
+    df_forcing = pd.concat(dfs)
+    df_forcing = df_forcing.drop_duplicates(subset='Date')
+    df_forcing = df_forcing.sort_values(by='Date')
+    df_forcing = df_forcing.reset_index(drop=True)
+    df_forcing['DOY'] = df_forcing['Date'].dt.dayofyear
+    df_forcing['Year'] = df_forcing['Date'].dt.year
+    return df_forcing
 
 
-# # %%
-# print(df_forcing)
-# # %%
-# ## Interpolate discrete soil moisture data
-# # df_forcing["Soil moisture interp"] = df_forcing["Soil moisture"].interpolate('quadratic')
+df_forcing = load_df_forcing(paths_df_forcing=paths_df_forcing)
+
+
+
+# %%
+print(df_forcing)
+# %%
+# Interpolate discrete soil moisture data
+df_forcing["Soil moisture interp"] = df_forcing["Soil moisture"].interpolate('quadratic')
 
 # # ## Assume that the forcing data (units: mm) can be equated to relative changes in volumetric 
 # # # between two arbitrary minimum and maximum values
